@@ -1,15 +1,5 @@
-# vision_agent/vision_kb_lookup.py
-"""
-Lets the vision agent look up prior findings in the shared knowledge base
-before or after analyzing a new image — e.g. "has this tag/equipment been
-flagged before" for cross-referencing across inspection visits.
-
-Kept as a thin, separate function rather than baked into analyze_image()
-itself: querying the KB is a distinct action from extracting observations
-from THIS image, and the vision model's own OBSERVED/UNCLEAR output should
-never be silently blended with retrieved historical text in the same call.
-"""
-
+import sys
+sys.path.append("C:/Users/Dharm/Desktop/Sovereign_AI")
 from knowledge.retriever import query_knowledge, query_knowledge_with_metadata
 
 

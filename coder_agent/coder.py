@@ -9,8 +9,8 @@ on failure (surface to user, log, re-route, etc).
 
 from dataclasses import dataclass
 
-from coder_agent.coder_agent import generate_code
-from coder_agent.sandbox_runner import run_in_sandbox, SandboxResult, SandboxViolation
+from coder_agent import generate_code
+from sandbox_runner import run_in_sandbox, SandboxResult, SandboxViolation
 
 
 @dataclass
