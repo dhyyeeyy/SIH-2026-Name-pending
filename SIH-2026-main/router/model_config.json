@@ -1,0 +1,37 @@
+{
+  "_comment": "Team-finalized model pool as of 2026-08-28. qwen3.5:2b tag is UNCONFIRMED in Ollama's public library -- verify with `ollama search qwen` before pulling/relying on it.",
+  "models": {
+    "general": {
+      "ollama_tag": "qwen3:1.7b",
+      "role": "general",
+      "description": "General reasoning / orchestration",
+      "context_window": 32768,
+      "json_mode": true,
+      "pinned_device": "gpu"
+    },
+    "code": {
+      "ollama_tag": "qwen2.5-coder:3b",
+      "role": "code",
+      "description": "Coding specialist -- generation/repair",
+      "context_window": 32768,
+      "json_mode": true,
+      "pinned_device": "gpu"
+    },
+    "vision": {
+      "ollama_tag": "qwen3.5:2b",
+      "role": "vision",
+      "description": "Vision / OCR specialist -- tag unconfirmed, verify before use",
+      "context_window": 32768,
+      "json_mode": true,
+      "pinned_device": "gpu"
+    },
+    "embedding": {
+      "ollama_tag": "nomic-embed-text",
+      "role": "embedding",
+      "description": "Local embeddings for RAG + router classification",
+      "context_window": 8192,
+      "json_mode": false,
+      "pinned_device": "cpu"
+    }
+  }
+}

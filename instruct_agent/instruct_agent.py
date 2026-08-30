@@ -1,27 +1,3 @@
-"""
-instruct_agent.py
-
-Instruction-following reasoning over the shared knowledge base.
-
-Model: smolLM:3B (Modelfile: `eng-general`) — chosen specifically because
-this module's job is to follow an instruction *exactly* ("summarize this",
-"extract only the dates", "make it shorter", "list only failures") against
-retrieved context, without drifting into parametric knowledge or ignoring
-the requested output shape. Instruction-following fidelity matters more
-here than raw reasoning depth.
-
-Import boundary (deliberate, enforced by what is and isn't imported below):
-  - This module imports ONLY `knowledge.retriever` (read-only queries).
-  - It NEVER imports `knowledge.ingest`. It has no code path that can write
-    to ChromaDB. A summary or extraction produced here is not re-ingested
-    into the KB — doing so would blend derived/interpreted content in with
-    raw observations, the same problem vision_kb_lookup.py avoids on the
-    vision side by keeping `vision_observed` separate from `vision_unclear`.
-
-If you find yourself adding an `ingest` call to this file, stop — that
-almost certainly belongs in vision.py / knowledge/ingest.py instead.
-"""
-
 import json
 import logging
 from typing import Optional

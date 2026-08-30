@@ -1,22 +1,34 @@
+import asyncio
+import dataclasses
 import logging
+import tempfile
 from typing import Optional
 
 from router import route
-from instruct import run_instruct
-from vision import run_vision_task
+from instruct_agent.instruct import run_instruct
+from vision_agent.vision import run_vision_task
 
 try:
-    from coder import run_coder_task
-except ImportError:  # coder.py's real signature wasn't available while
-    # building this module -- stub kept so the "code" branch fails loudly
-    # and specifically instead of the orchestrator import crashing outright.
-    def run_coder_task(prompt: str, context: Optional[str] = None) -> dict:
+    from coder_agent.coder import run_coder_task
+except ImportError:  # coder_agent/coder.py entry point not importable in
+    # this environment -- stub kept so the "code" branch fails loudly and
+    # specifically instead of the orchestrator import crashing outright.
+    async def run_coder_task(task_prompt: str, context: dict, timeout: int = 20):
         raise NotImplementedError(
-            "coder.run_coder_task() not wired up yet -- replace this stub "
-            "with the real import once coder.py's entry point is confirmed."
+            "coder_agent.coder.run_coder_task() could not be imported -- "
+            "check that coder_agent/ is on the path and __init__.py exists."
         )
 
 logger = logging.getLogger(__name__)
+
+
+def _format_coder_answer(result: "dataclasses.dataclass") -> str:
+    if result.success:
+        parts = [result.stdout.strip()] if result.stdout.strip() else ["Code ran successfully with no output."]
+        if result.output_files:
+            parts.append("Files produced: " + ", ".join(result.output_files))
+        return "\n\n".join(parts)
+    return f"Code generation/execution failed: {result.stderr}"
 
 
 def handle_request(
@@ -28,33 +40,6 @@ def handle_request(
     n_results: int = 5,
     cross_reference: bool = False,
 ) -> dict:
-    """
-    Single entry point for an incoming user request.
-
-    Args:
-        prompt: the user's question/instruction.
-        context: optional free-text context supplied alongside the prompt
-            (e.g. extra framing from a UI form field). NOT the same thing
-            as the KB-retrieved context inside instruct_agent -- this is
-            passed straight through to whichever agent handles the
-            request, on top of whatever that agent retrieves/extracts
-            itself.
-        attachment_path: path to an image or PDF, if the user attached
-            one. Presence of this alone determines routing to vision --
-            see module docstring.
-        source_id: optional, scoped retrieval for the general path, or
-            passed to vision for KB storage/cross-reference tagging.
-        content_types: optional content_type filter for general's KB
-            retrieval (e.g. restrict to ["vision_observed"]).
-        n_results: chunk count for general's KB retrieval.
-        cross_reference: forwarded to vision -- look up prior
-            vision_observed findings for the same equipment.
-
-    Returns:
-        A dict from whichever agent handled the request, plus a
-        "handled_by" key ("vision" | "general" | "code") so the caller
-        (UI, logs) can tell which path was taken without re-deriving it.
-    """
     # --- Attachment present: vision, unconditionally. -------------------
     # Vision is the only agent that reads a file. It internally decides,
     # per page, whether to actually invoke the vision model or defer to
@@ -82,7 +67,24 @@ def handle_request(
     )
 
     if role == "code":
-        result = run_coder_task(prompt=prompt, context=context)
+        # run_coder_task needs a dict context with 'output_dir', and is
+        # async -- neither matches what handle_request receives/is, so
+        # both get bridged here rather than in coder_agent/coder.py.
+        output_dir = tempfile.mkdtemp(prefix="coder_output_")
+        coder_context: dict = {"output_dir": output_dir}
+        if context:
+            # orchestrator.context is free-text framing (see handle_request
+            # docstring); coder.py doesn't define a slot for that, so it
+            # rides along under its own key rather than overloading
+            # 'output_dir' or being silently dropped.
+            coder_context["notes"] = context
+
+        coder_result = asyncio.run(run_coder_task(task_prompt=prompt, context=coder_context))
+
+        result = dataclasses.asdict(coder_result)
+        result["answer"] = _format_coder_answer(coder_result)
+        result["insufficient_context"] = None  # not a meaningful concept for the code path
+        result["error"] = not coder_result.success
         result["handled_by"] = "code"
         return result
 

@@ -1,7 +1,8 @@
 import asyncio
 import logging
 from typing import Optional
-from instruct_agent import InstructAgentError, run_instruct_task
+
+from instruct_agent.instruct_agent import InstructAgentError, run_instruct_task
 logger = logging.getLogger(__name__)
 
 

@@ -1,9 +1,8 @@
 import asyncio
 from pathlib import Path
-import sys
-sys.path.append("C:/Users/Dharm/Desktop/Sovereign_AI")
-from vision_agent import analyze_document
-from vision_kb_lookup import find_prior_findings_with_source
+
+from vision_agent.vision_agent import analyze_document
+from vision_agent.vision_kb_lookup import find_prior_findings_with_source
 from knowledge.ingest import ingest_vision_result
 
 

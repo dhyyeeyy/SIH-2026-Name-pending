@@ -1,0 +1,21 @@
+# --- API layer ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20   # required by FastAPI for File()/Form() uploads
+pydantic==2.10.4
+
+# --- Ollama client (generation + embeddings) ---
+ollama==0.4.4
+aiohttp==3.11.11
+
+# --- Vector store ---
+chromadb==0.5.23
+
+# --- PDF / OCR pipeline ---
+pdfplumber==0.11.4
+paddleocr==2.9.1
+paddlepaddle==2.6.2        # PaddleOCR's CPU backend; see tools/precache_paddleocr.py
+                            # for the one-time offline weight download step
+
+# --- Utility ---
+Pillow==11.0.0              # image handling for vision_agent.py

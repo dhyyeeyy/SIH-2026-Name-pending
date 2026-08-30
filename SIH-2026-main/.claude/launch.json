@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "agent-test-ui",
+      "runtimeExecutable": "venv/Scripts/streamlit.exe",
+      "runtimeArgs": ["run", "dev_ui/test_ui.py", "--server.headless", "true"],
+      "port": 8501
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "port": 5173
+    }
+  ]
+}
