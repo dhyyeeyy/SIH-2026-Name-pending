@@ -39,6 +39,7 @@ def handle_request(
     content_types: Optional[list[str]] = None,
     n_results: int = 5,
     cross_reference: bool = False,
+    use_rag: bool = False,
 ) -> dict:
     # --- Attachment present: vision, unconditionally. -------------------
     # Vision is the only agent that reads a file. It internally decides,
@@ -59,6 +60,10 @@ def handle_request(
         return result
 
     # --- No attachment: ask the router to pick code vs. general. --------
+    logger.info("orchestrator: use_rag=%s", use_rag)
+    if not use_rag:
+        logger.info("orchestrator: document search disabled -> RAG retrieval skipped")
+
     routing = route(prompt)
     role = routing["role"]
     logger.info(
@@ -97,6 +102,7 @@ def handle_request(
         source_id=source_id,
         content_types=content_types,
         n_results=n_results,
+        use_rag=use_rag,
     )
     result["handled_by"] = "general"
     return result

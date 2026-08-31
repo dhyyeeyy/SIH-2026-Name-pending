@@ -16,7 +16,7 @@ import httpx
 from chromadb import Documents, EmbeddingFunction, Embeddings
 
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
-EMBED_MODEL = "nomic-embed-text"
+EMBED_MODEL = "eng-embeddings"
 REQUEST_TIMEOUT_SECONDS = 30
 
 

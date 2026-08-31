@@ -8,14 +8,23 @@ pydantic==2.10.4
 ollama==0.4.4
 aiohttp==3.11.11
 
+# --- Semantic routing (code vs. general classification) ---
+semantic-router==0.1.2      # see router.py -- replaces the hand-rolled
+                            # average-cosine-similarity router, which had
+                            # a real bug (averaging diluted strong matches)
+
 # --- Vector store ---
 chromadb==0.5.23
 
 # --- PDF / OCR pipeline ---
 pdfplumber==0.11.4
-paddleocr==2.9.1
-paddlepaddle==2.6.2        # PaddleOCR's CPU backend; see tools/precache_paddleocr.py
-                            # for the one-time offline weight download step
+# PaddleOCR/paddlepaddle intentionally NOT included here -- tools/ocr_tools.py
+# and tools/precache_paddleocr.py (which need it) are described in the
+# build log as already existing from a prior session, but haven't
+# actually been created/touched in this one, and nothing currently built
+# here imports PaddleOCR. Add paddleocr + paddlepaddle back once that
+# module is actually wired in -- pulling them in now just adds a heavy,
+# platform-finicky install for code that doesn't exist yet.
 
 # --- Utility ---
 Pillow==11.0.0              # image handling for vision_agent.py

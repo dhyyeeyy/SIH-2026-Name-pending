@@ -12,6 +12,7 @@ def run_instruct(
     source_id: Optional[str] = None,
     content_types: Optional[list[str]] = None,
     n_results: int = 5,
+    use_rag: bool = True,
 ) -> dict:
     
     try:
@@ -22,6 +23,7 @@ def run_instruct(
                 source_id=source_id,
                 content_types=content_types,
                 n_results=n_results,
+                use_rag=use_rag,
             )
         )
         result["instruction"] = instruction

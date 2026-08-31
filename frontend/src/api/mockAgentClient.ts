@@ -20,7 +20,7 @@ function classify(query: string, hasImage: boolean): "general" | "code" | "visio
   return "general"
 }
 
-export async function mockRun({ query, attachments, use_rag = true }: AgentRequest): Promise<AgentResult> {
+export async function mockRun({ query, attachments, use_rag = false }: AgentRequest): Promise<AgentResult> {
   // Manual escape hatches for exercising states that are rare/hard to
   // trigger organically from the real backend during dev.
   const lowerQuery = query.toLowerCase()

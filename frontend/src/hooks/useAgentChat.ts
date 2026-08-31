@@ -13,9 +13,6 @@ function truncateTitle(text: string, max = 42): string {
 }
 
 interface UseAgentChatOptions {
-  /** Called once a message finishes successfully, so callers (e.g. the
-   * canvas panel) can react to the final content without needing to
-   * diff session state themselves. */
   onMessageResolved?: (message: ChatMessage) => void
 }
 
@@ -24,13 +21,13 @@ export function useAgentChat({ onMessageResolved }: UseAgentChatOptions = {}) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [documents, setDocuments] = useState<KnowledgeDoc[]>([])
-  const [useRag, setUseRag] = useState(true)
+  const [useRag, setUseRag] = useState(false)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
 
   const newTask = useCallback(() => {
     setActiveSessionId(null)
-    setUseRag(true)
+    setUseRag(false)
   }, [])
 
   const toggleRag = useCallback(() => {
@@ -43,13 +40,16 @@ export function useAgentChat({ onMessageResolved }: UseAgentChatOptions = {}) {
 
   const submit = useCallback(
     async (query: string, attachments: File[]) => {
-      const attachmentNames = attachments.map((f) => f.name)
+      if (!query.trim()) return
+
+      const attachmentNames = attachments.map((file) => file.name)
       const userMessage: ChatMessage = {
         id: newId(),
         role: "user",
         content: query,
         attachmentNames: attachmentNames.length ? attachmentNames : undefined,
       }
+
       const pendingMessage: ChatMessage = {
         id: newId(),
         role: "assistant",
@@ -58,68 +58,86 @@ export function useAgentChat({ onMessageResolved }: UseAgentChatOptions = {}) {
         expectingVision: attachmentNames.length > 0,
       }
 
-      // Decide the session id up front (rather than inside the setSessions
-      // updater) so the updater stays pure -- React 18 StrictMode
-      // double-invokes updater functions in dev to catch exactly this kind
-      // of side effect, and a mutated closure variable here caused the
-      // whole submit flow to hang unpredictably.
       const isNewSession = !activeSessionId
       const sessionId = activeSessionId ?? newId()
 
       setSessions((prev) => {
-        if (!isNewSession && prev.some((s) => s.id === sessionId)) {
+        const existing = prev.find((s) => s.id === sessionId)
+
+        if (existing) {
           return prev.map((s) =>
             s.id === sessionId ? { ...s, messages: [...s.messages, userMessage, pendingMessage] } : s,
           )
         }
-        const session: Session = {
-          id: sessionId,
-          title: truncateTitle(query),
-          messages: [userMessage, pendingMessage],
-        }
-        return [session, ...prev]
+
+        return [{ id: sessionId, title: truncateTitle(query), messages: [userMessage, pendingMessage] }, ...prev]
       })
-      if (isNewSession) setActiveSessionId(sessionId)
+
+      if (isNewSession) {
+        setActiveSessionId(sessionId)
+      }
 
       setPending(true)
-      try {
-        const result = await runAgent({ query, user_id: "demo-user", attachments, use_rag: useRag })
 
-        const wasVisionProcessed = result.trace.some((t) => t.step === "vision_extraction")
+      try {
+        const result = await runAgent({
+          query,
+          user_id: "demo-user",
+          attachments,
+          use_rag: useRag,
+        })
+
+        const trace = Array.isArray(result.trace) ? result.trace : []
+        const wasVisionProcessed = trace.some((step) => step.step === "vision_extraction")
+
         if (wasVisionProcessed && attachmentNames.length > 0) {
           setDocuments((prev) => {
-            const existing = new Set(prev.map((d) => d.name))
-            const additions = attachmentNames.filter((name) => !existing.has(name)).map((name) => ({ name, kind: "image" as const }))
-            return additions.length ? [...prev, ...additions] : prev
+            const existingNames = new Set(prev.map((doc) => doc.name))
+            const additions = attachmentNames
+              .filter((name) => !existingNames.has(name))
+              .map((name) => ({ name, kind: "image" as const }))
+
+            return additions.length > 0 ? [...prev, ...additions] : prev
           })
         }
 
         const resolvedMessage: ChatMessage = {
           ...pendingMessage,
-          content: result.final_answer,
-          trace: result.trace,
+          content: result.final_answer || "No response returned from the server.",
+          trace,
           pending: false,
+          isError: false,
         }
 
         setSessions((prev) =>
           prev.map((s) =>
             s.id === sessionId
-              ? { ...s, messages: s.messages.map((m) => (m.id === pendingMessage.id ? resolvedMessage : m)) }
+              ? {
+                  ...s,
+                  messages: s.messages.map((message) => (message.id === pendingMessage.id ? resolvedMessage : message)),
+                }
               : s,
           ),
         )
+
         onMessageResolved?.(resolvedMessage)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Something went wrong."
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Something went wrong while contacting the backend."
+
         setSessions((prev) =>
           prev.map((s) =>
             s.id === sessionId
               ? {
                   ...s,
-                  messages: s.messages.map((m) =>
-                    m.id === pendingMessage.id
-                      ? { ...m, content: message, pending: false, isError: true }
-                      : m,
+                  messages: s.messages.map((message) =>
+                    message.id === pendingMessage.id
+                      ? {
+                          ...message,
+                          content: errorMessage,
+                          pending: false,
+                          isError: true,
+                        }
+                      : message,
                   ),
                 }
               : s,
@@ -129,7 +147,7 @@ export function useAgentChat({ onMessageResolved }: UseAgentChatOptions = {}) {
         setPending(false)
       }
     },
-    [activeSessionId, useRag, onMessageResolved],
+    [activeSessionId, onMessageResolved, useRag],
   )
 
   return {

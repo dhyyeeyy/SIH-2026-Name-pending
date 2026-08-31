@@ -1,12 +1,17 @@
 # sandbox/runner.py
 import ast
-import subprocess
-import tempfile
 import os
-import resource
 import signal
-from pathlib import Path
+import subprocess
+import sys
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
+
+try:
+    import resource
+except ImportError:  # Windows does not provide resource
+    resource = None
 
 # --- 1. Static analysis: reject before ever running ---
 
@@ -70,10 +75,25 @@ OUTPUT_DIR = _ALLOWED_DIR
 def _set_resource_limits():
     """Called in the child process (preexec_fn) before exec — caps CPU, memory,
     and blocks forking so a runaway script can't fork-bomb or eat all RAM."""
+    if resource is None:
+        return
     resource.setrlimit(resource.RLIMIT_CPU, (10, 10))                  # 10s CPU time
     resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))  # 512MB address space
     resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))                  # no forking/threads spawning procs
-    os.setsid()  # own process group, so we can kill children on timeout too
+    try:
+        os.setsid()  # own process group, so we can kill children on timeout too
+    except (AttributeError, OSError):
+        pass
+
+
+def _terminate_process_tree(proc: subprocess.Popen) -> None:
+    if os.name == "nt":
+        proc.kill()
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (AttributeError, OSError, ProcessLookupError):
+        proc.kill()
 
 
 @dataclass
@@ -97,20 +117,26 @@ def run_in_sandbox(code: str, output_dir: str, timeout: int = 20) -> SandboxResu
         f.write(full_script)
         script_path = f.name
 
+    python_cmd = [sys.executable, "-I", script_path]
+    env = os.environ.copy()
+    if os.name != "nt":
+        env = {"PATH": "/usr/bin:/bin"}
+
     try:
-        proc = subprocess.Popen(
-            ["python3", "-I", script_path],   # -I = isolated mode: ignores env vars, user site-packages
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            preexec_fn=_set_resource_limits,   # Linux only
-            cwd=str(output_path),              # relative paths land inside output_dir
-            env={"PATH": "/usr/bin:/bin"},     # minimal env, no secrets leak via os.environ
-        )
+        popen_kwargs = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "text": True,
+            "cwd": str(output_path),
+            "env": env,
+        }
+        if os.name != "nt" and resource is not None:
+            popen_kwargs["preexec_fn"] = _set_resource_limits
+        proc = subprocess.Popen(python_cmd, **popen_kwargs)
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)  # kill whole process group
+            _terminate_process_tree(proc)
             stdout, stderr = proc.communicate()
             return SandboxResult(False, stdout, f"TIMEOUT after {timeout}s\n{stderr}", [])
 

@@ -6,7 +6,7 @@ import { mockRun } from "./mockAgentClient"
 import { realRun } from "./realAgentClient"
 import type { AgentRequest, AgentResult } from "../types/agent"
 
-const useMock = import.meta.env.VITE_USE_MOCK_API !== "false"
+const useMock = import.meta.env.VITE_USE_MOCK_API === "true"
 
 export function runAgent(request: AgentRequest): Promise<AgentResult> {
   return useMock ? mockRun(request) : realRun(request)

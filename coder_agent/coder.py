@@ -9,8 +9,8 @@ on failure (surface to user, log, re-route, etc).
 
 from dataclasses import dataclass
 
-from coder_agent import generate_code
-from sandbox_runner import run_in_sandbox, SandboxResult, SandboxViolation
+from coder_agent.coder_agent import generate_code
+from coder_agent.sandbox_runner import run_in_sandbox, SandboxResult, SandboxViolation
 
 
 @dataclass
@@ -22,7 +22,7 @@ class CoderTaskResult:
     generated_code: str | None   # kept for logging/debugging even on failure
 
 
-async def run_coder_task(task_prompt: str, context: dict, timeout: int = 20) -> CoderTaskResult:
+async def run_coder_task(task_prompt: str, context: dict, timeout: int = 100) -> CoderTaskResult:
     """
     Runs the full coder pipeline for one task:
       1. Ask eng-coder to generate code for `task_prompt`

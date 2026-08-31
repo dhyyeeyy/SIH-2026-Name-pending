@@ -1,6 +1,5 @@
 import { AlertIcon, DocumentIcon, ScanIcon } from "./icons"
 import { CodeReferenceCard } from "./CodeReferenceCard"
-import { TraceView } from "./TraceView"
 import { parseCodeBlocks } from "../lib/parseCodeBlocks"
 import { extractModel } from "../lib/messageUtils"
 import type { ChatMessage } from "../types/chat"
@@ -109,8 +108,6 @@ export function MessageBubble({ message, activeCanvasId, onOpenCanvas }: Message
         {hasNoRagMatch && (
           <p className="mt-1.5 px-1 text-xs text-ash/60">No matching documents — answered from general knowledge</p>
         )}
-
-        {!isUser && message.trace && <TraceView trace={message.trace} />}
       </div>
     </div>
   )
