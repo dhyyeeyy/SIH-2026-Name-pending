@@ -1,7 +1,0 @@
-venv/
-__pycache__/
-*.pyc
-agent/chroma_store/
-.pytest_cache/
-*.egg-info/
-dev_ui/_uploads/
