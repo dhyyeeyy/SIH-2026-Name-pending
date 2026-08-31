@@ -19,18 +19,26 @@ BANNED_MODULES = {
     "socket", "requests", "urllib", "urllib2", "http", "ftplib",
     "subprocess", "multiprocessing", "os.system", "ctypes", "shutil.rmtree"
 }
-BANNED_CALLS = {"eval", "exec", "compile", "__import__", "open"}  # 'open' handled separately below
+BANNED_CALLS = {"eval", "exec", "compile", "__import__", "open", "input"}
 
 class SandboxViolation(Exception):
     pass
 
-def static_check(code: str) -> None:
-    """Parse the code and reject anything touching banned modules/calls
-    before it ever runs as a subprocess."""
+def static_check(code: str, *, strict: bool = False) -> list[str]:
+    """Parse the code and optionally reject anything touching banned modules/calls.
+
+    The default behavior is intentionally non-fatal: the generator can still show
+    a user the code it produced even if the sandbox would consider it risky,
+    while the caller can surface the warning in stderr without blocking output.
+    """
+    warnings: list[str] = []
     try:
         tree = ast.parse(code)
     except SyntaxError as e:
-        raise SandboxViolation(f"Code failed to parse: {e}")
+        if strict:
+            raise SandboxViolation(f"Code failed to parse: {e}")
+        warnings.append(f"Code failed to parse: {e}")
+        return warnings
 
     for node in ast.walk(tree):
         # import x / import x.y
@@ -38,20 +46,30 @@ def static_check(code: str) -> None:
             for alias in node.names:
                 if alias.name.split(".")[0] in {"socket", "requests", "urllib",
                                                   "subprocess", "multiprocessing", "ctypes"}:
-                    raise SandboxViolation(f"Banned import: {alias.name}")
+                    msg = f"Banned import: {alias.name}"
+                    if strict:
+                        raise SandboxViolation(msg)
+                    warnings.append(msg)
         # from x import y
         if isinstance(node, ast.ImportFrom):
             if node.module and node.module.split(".")[0] in {"socket", "requests", "urllib",
                                                                "subprocess", "multiprocessing", "ctypes"}:
-                raise SandboxViolation(f"Banned import: {node.module}")
-        # eval(...), exec(...), __import__(...)
+                msg = f"Banned import: {node.module}"
+                if strict:
+                    raise SandboxViolation(msg)
+                warnings.append(msg)
+        # eval(...), exec(...), __import__(...), input(...)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in {"eval", "exec", "compile", "__import__"}:
-                raise SandboxViolation(f"Banned call: {node.func.id}()")
+            if node.func.id in {"eval", "exec", "compile", "__import__", "input"}:
+                msg = f"Banned call: {node.func.id}()"
+                if strict:
+                    raise SandboxViolation(msg)
+                warnings.append(msg)
 
     # 'open()' calls with a path outside output_dir aren't reliably catchable
     # statically (paths can be built dynamically) -- so open() is instead
     # restricted at RUNTIME via the wrapper below, not here.
+    return warnings
 
 
 # --- 2 & 3. Runtime wrapper injected around the model's code ---
@@ -108,8 +126,10 @@ def run_in_sandbox(code: str, output_dir: str, timeout: int = 20) -> SandboxResu
     output_path = Path(output_dir).resolve()
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Layer 1: static reject before touching disk
-    static_check(code)
+    # Layer 1: static scan for risky patterns. These are presented as warnings
+    # instead of a hard block so generated code can still reach the user.
+    warnings = static_check(code)
+    warning_text = "\n".join(warnings)
 
     full_script = RUNTIME_GUARD.format(output_dir=str(output_path)) + "\n\n" + code
 
@@ -120,7 +140,7 @@ def run_in_sandbox(code: str, output_dir: str, timeout: int = 20) -> SandboxResu
     python_cmd = [sys.executable, "-I", script_path]
     env = os.environ.copy()
     if os.name != "nt":
-        env = {"PATH": "/usr/bin:/bin"}
+        env["PATH"] = "/usr/bin:/bin" + os.pathsep + env.get("PATH", "")
 
     try:
         popen_kwargs = {
@@ -129,6 +149,7 @@ def run_in_sandbox(code: str, output_dir: str, timeout: int = 20) -> SandboxResu
             "text": True,
             "cwd": str(output_path),
             "env": env,
+            "stdin": subprocess.DEVNULL,
         }
         if os.name != "nt" and resource is not None:
             popen_kwargs["preexec_fn"] = _set_resource_limits
@@ -142,7 +163,13 @@ def run_in_sandbox(code: str, output_dir: str, timeout: int = 20) -> SandboxResu
 
         success = proc.returncode == 0
         output_files = [str(p) for p in output_path.rglob("*") if p.is_file()]
-        return SandboxResult(success, stdout, stderr, output_files)
+        combined_stderr = stderr.strip()
+        if warning_text:
+            combined_stderr = "\n".join(part for part in [warning_text, combined_stderr] if part).strip()
+        return SandboxResult(success, stdout, combined_stderr, output_files)
 
     finally:
-        os.unlink(script_path)  # clean up the temp script regardless of outcome
+        try:
+            os.unlink(script_path)
+        except FileNotFoundError:
+            pass

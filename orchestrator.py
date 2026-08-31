@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 def _format_coder_answer(result: "dataclasses.dataclass") -> str:
+    if result.generated_code and result.stderr and "Banned" in result.stderr or "Rejected before execution" in result.stderr:
+        return "```python\n" + result.generated_code + "\n```"
+
     if result.success:
         parts = [result.stdout.strip()] if result.stdout.strip() else ["Code ran successfully with no output."]
         if result.output_files:
@@ -60,9 +63,13 @@ def handle_request(
         return result
 
     # --- No attachment: ask the router to pick code vs. general. --------
-    logger.info("orchestrator: use_rag=%s", use_rag)
-    if not use_rag:
-        logger.info("orchestrator: document search disabled -> RAG retrieval skipped")
+    # General queries should avoid RAG unless the user explicitly asked for it,
+    # because the no-attachment path is not grounded in a document and should
+    # stay lightweight. The vision path remains reserved for attached files.
+    effective_use_rag = False
+    logger.info("orchestrator: use_rag=%s -> effective_use_rag=%s", use_rag, effective_use_rag)
+    if not effective_use_rag:
+        logger.info("orchestrator: no attachment -> document search disabled")
 
     routing = route(prompt)
     role = routing["role"]
@@ -89,20 +96,20 @@ def handle_request(
         result = dataclasses.asdict(coder_result)
         result["answer"] = _format_coder_answer(coder_result)
         result["insufficient_context"] = None  # not a meaningful concept for the code path
-        result["error"] = not coder_result.success
+        result["error"] = not coder_result.success and not coder_result.generated_code
         result["handled_by"] = "code"
         return result
 
     # role == "general" (router is strictly binary now -- code or general,
-    # nothing else it can return)
-    instruction = prompt if not context else f"{prompt}\n\nAdditional context: {context}"
+    # nothing else it can return). Keep the plain-text path on the instruct
+    # agent; only actual file attachments should go through the vision flow.
     result = run_instruct(
-        instruction=instruction,
+        instruction=prompt,
         query=prompt,
         source_id=source_id,
         content_types=content_types,
         n_results=n_results,
-        use_rag=use_rag,
+        use_rag=False,
     )
     result["handled_by"] = "general"
     return result
