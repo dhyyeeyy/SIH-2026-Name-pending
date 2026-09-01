@@ -74,3 +74,25 @@ def _extract_code_block(text: str) -> str | None:
             return candidate
 
     return None
+
+
+def parse_code_snippet(text: str) -> str | None:
+    """Extract the Python code snippet from mixed model output or traceback text."""
+    if not text or not text.strip():
+        return None
+
+    match = re.search(r"```(?:python)?\s*(.*?)```", text, re.DOTALL)
+    if match:
+        candidate = match.group(1).strip()
+        if candidate:
+            return candidate
+
+    lines = text.splitlines()
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("Traceback") or stripped.startswith("File ") or stripped.startswith("  File "):
+            continue
+        if stripped and any(token in stripped for token in ("def ", "import ", "print(", "if __name__ ==", "for ", "while ", "return ")):
+            return stripped
+
+    return None

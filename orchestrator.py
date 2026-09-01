@@ -23,7 +23,16 @@ logger = logging.getLogger(__name__)
 
 
 def _format_coder_answer(result: "dataclasses.dataclass") -> str:
-    if result.generated_code and result.stderr and "Banned" in result.stderr or "Rejected before execution" in result.stderr:
+    # If the model already produced valid code, prefer showing that code instead of
+    # dumping raw runtime traceback noise into the chat.
+    if result.generated_code:
+        if result.success:
+            parts = [result.stdout.strip()] if result.stdout.strip() else ["Code ran successfully with no output."]
+            if result.output_files:
+                parts.append("Files produced: " + ", ".join(result.output_files))
+            return "\n\n".join(parts) + "\n\n```python\n" + result.generated_code + "\n```"
+        if "Banned" in (result.stderr or "") or "Rejected before execution" in (result.stderr or ""):
+            return "```python\n" + result.generated_code + "\n```"
         return "```python\n" + result.generated_code + "\n```"
 
     if result.success:

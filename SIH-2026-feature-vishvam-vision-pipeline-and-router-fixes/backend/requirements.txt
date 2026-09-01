@@ -1,0 +1,38 @@
+# --- API layer ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20   # required by FastAPI for File()/Form() uploads
+pydantic==2.10.4
+
+# --- Ollama client (generation + embeddings) ---
+ollama==0.4.4
+aiohttp==3.11.11
+
+# --- Semantic routing (code vs. general classification) ---
+semantic-router==0.1.2      # see router.py -- replaces the hand-rolled
+                            # average-cosine-similarity router, which had
+                            # a real bug (averaging diluted strong matches)
+
+# --- Vector store ---
+chromadb==0.5.23
+
+# --- PDF / OCR pipeline ---
+pdfplumber==0.11.4          # tools/ocr_tools.py -- per-page text extraction
+pymupdf==1.28.2             # vision_agent.py -- renders PDF pages to images
+                            # for the vision model; replaces pdf2image, which
+                            # needs a poppler binary on PATH that isn't
+                            # available on this machine. pymupdf is a
+                            # self-contained wheel, no external binary.
+# PaddleOCR/paddlepaddle intentionally NOT included -- a page with no
+# extractable text layer already falls through to the vision model (see
+# vision_agent.py's TEXT_RICH_PAGE_THRESHOLD path), which reads the
+# rendered page directly. A second, separate OCR engine would be
+# redundant with that path, not a missing piece.
+
+# --- Utility ---
+Pillow==11.0.0              # image handling for vision_agent.py
+
+# --- Test-only (not needed by the running service) ---
+pytest-asyncio               # required for @pytest.mark.asyncio tests to
+                              # actually run instead of silently no-op'ing
+reportlab                    # used by test_vision_agent.py's PDF fixtures
